@@ -28,3 +28,4 @@ routeTree.gen.ts
 # Claude, don't remove these:
 .playwright-mcp
 *.png
+.vercel
