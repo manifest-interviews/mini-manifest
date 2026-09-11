@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Temporal } from "temporal-polyfill";
-import { AddBookingModal, PaymentPanel } from "../booking-modal";
+import { AddBookingModal, BookingDetailsModal } from "../booking-modal";
 import type { Booking } from "../db";
-import { insert, remove, useOrg, useRows } from "../db";
+import { useOrg, useRows } from "../db";
 import { formatInstant, formatMoney } from "../schedule";
-import { BUTTON, DANGER_BUTTON, Modal, PRIMARY_BUTTON } from "../ui";
+import { BUTTON, PRIMARY_BUTTON } from "../ui";
 
 export const Route = createFileRoute("/$org/ops/bookings")({ component: BookingsList });
 
 const PAGE_SIZE = 10;
-const CENTS_PER_UNIT = 100;
 
 function BookingsList() {
   const { org: handle } = Route.useParams();
@@ -115,111 +114,7 @@ function BookingsList() {
       </div>
 
       {adding && <AddBookingModal org={org} onClose={() => setAdding(false)} />}
-      {selected && (
-        <BookingModal
-          booking={selected}
-          productName={productName(selected.productId)}
-          channelName={channelName(selected.channelId)}
-          onClose={() => setSelected(null)}
-        />
-      )}
+      {selected && <BookingDetailsModal booking={selected} onClose={() => setSelected(null)} />}
     </div>
-  );
-}
-
-function BookingModal({
-  booking,
-  productName,
-  channelName,
-  onClose,
-}: {
-  booking: Booking;
-  productName: string;
-  channelName: string;
-  onClose: () => void;
-}) {
-  const payments = useRows("payments", booking.organizationId).filter(
-    (payment) => payment.bookingId === booking.id,
-  );
-  const paid = payments.reduce((sum, payment) => sum + payment.amountCents, 0);
-  const balance = booking.priceCents - paid;
-
-  return (
-    <Modal
-      title={booking.customerName}
-      subtitle={`${productName} via ${channelName} — ${formatInstant(booking.start)} → ${formatInstant(
-        booking.end,
-      )}`}
-      onClose={onClose}
-      footer={
-        <>
-          <button
-            onClick={() => {
-              remove("bookings", booking.id);
-              onClose();
-            }}
-            className={`mr-auto ${DANGER_BUTTON}`}
-          >
-            Cancel booking
-          </button>
-          <button onClick={onClose} className={BUTTON}>
-            Close
-          </button>
-        </>
-      }
-    >
-      <dl className="mb-4 grid grid-cols-3 divide-x divide-gray-200 rounded-lg bg-gray-50 text-center text-sm">
-        <div className="px-3 py-2">
-          <dt className="text-xs text-gray-500">Price</dt>
-          <dd className="font-semibold">{formatMoney(booking.priceCents)}</dd>
-        </div>
-        <div className="px-3 py-2">
-          <dt className="text-xs text-gray-500">Paid</dt>
-          <dd className="font-semibold">{formatMoney(paid)}</dd>
-        </div>
-        <div className="px-3 py-2">
-          <dt className="text-xs text-gray-500">Balance</dt>
-          <dd className={`font-semibold ${balance > 0 ? "text-amber-700" : ""}`}>
-            {formatMoney(balance)}
-          </dd>
-        </div>
-      </dl>
-
-      <h3 className="mb-1 text-sm font-semibold">Payments</h3>
-
-      <ul className="divide-y divide-gray-200 border border-gray-200 text-sm">
-        {payments.map((payment) => (
-          <li key={payment.id} className="flex items-center justify-between px-3 py-1.5">
-            <span>{formatMoney(payment.amountCents)}</span>
-            <button onClick={() => remove("payments", payment.id)} className="text-red-600">
-              Remove
-            </button>
-          </li>
-        ))}
-        {payments.length === 0 && <li className="px-3 py-1.5 text-gray-500">Nothing paid yet.</li>}
-      </ul>
-
-      {balance > 0 && (
-        <form
-          className="mt-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-
-            insert("payments", {
-              organizationId: booking.organizationId,
-              bookingId: booking.id,
-              amountCents: Math.round(Number(form.get("amount")) * CENTS_PER_UNIT),
-            });
-          }}
-        >
-          <PaymentPanel
-            label="Balance due"
-            dueCents={balance}
-            action={<button className={`${BUTTON} mb-0.5`}>Take payment</button>}
-          />
-        </form>
-      )}
-    </Modal>
   );
 }

@@ -40,14 +40,14 @@ function OrgShell() {
             params={{ org: handle }}
             activeProps={{ className: "font-semibold" }}
           >
-            Ops
+            Sales
           </Link>
           <Link
             to="/$org/manage"
             params={{ org: handle }}
             activeProps={{ className: "font-semibold" }}
           >
-            Manage
+            Settings
           </Link>
         </nav>
 

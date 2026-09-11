@@ -21,7 +21,11 @@ const stamps = {
 // Everything except the organization itself is scoped to one tenant.
 const tenant = { ...stamps, organizationId: z.uuid() };
 
-const organization = z.object({ ...stamps, handle: z.string().min(1), name: z.string().min(1) });
+const organization = z.object({
+  ...stamps,
+  handle: z.string().min(1),
+  name: z.string().min(1),
+});
 const product = z.object({ ...tenant, name: z.string().min(1) });
 
 const schedule = z.object({
@@ -51,7 +55,11 @@ const booking = z.object({
   customerName: z.string().min(1),
 });
 
-const payment = z.object({ ...tenant, bookingId: z.uuid(), amountCents: z.int().nonnegative() });
+const payment = z.object({
+  ...tenant,
+  bookingId: z.uuid(),
+  amountCents: z.int().nonnegative(),
+});
 
 const dbSchema = z.object({
   organizations: z.array(organization),
@@ -112,7 +120,7 @@ const SEEDS: OrgSeed[] = [
   {
     handle: "acme-tours",
     name: "Acme Tours",
-    channels: ["Direct", "Website", "OTA Partner"],
+    channels: ["Direct", "Website", "OTA Partner (Reseller)"],
     products: [
       {
         name: "Sunset Kayak Tour",
@@ -133,21 +141,21 @@ const SEEDS: OrgSeed[] = [
   {
     handle: "harbor-cruises",
     name: "Harbor Cruises",
-    channels: ["Direct", "Website", "Walk-up"],
+    channels: ["Direct", "Website", "Viator (Reseller)", "GetYourGuide (Reseller)"],
     products: [
       {
         name: "Harbor Sunset Cruise",
         daysOfWeek: [4, 5, 6, 7],
         time: "18:00",
         durationMinutes: 120,
-        prices: [6000, 6500, 7000],
+        prices: [6000, 6500, 7500, 7400],
       },
       {
         name: "Whale Watching",
         daysOfWeek: [6, 7],
         time: "08:00",
         durationMinutes: 240,
-        prices: [11000, 12000, null],
+        prices: [11000, 12000, 13500, null],
       },
     ],
   },
@@ -176,7 +184,12 @@ const DEPOSIT_EVERY = 3; // every 3rd booking has paid half
 
 function seed(): Db {
   const at = timestamp();
-  const row = <T>(data: T) => ({ ...data, id: crypto.randomUUID(), createdAt: at, updatedAt: at });
+  const row = <T>(data: T) => ({
+    ...data,
+    id: crypto.randomUUID(),
+    createdAt: at,
+    updatedAt: at,
+  });
   const db: Db = structuredClone(EMPTY);
 
   for (const spec of SEEDS) {
@@ -230,9 +243,15 @@ function seed(): Db {
 function seedBookings(
   db: Db,
   organizationId: string,
-  row: <T>(data: T) => T & { id: string; createdAt: Temporal.Instant; updatedAt: Temporal.Instant },
+  row: <T>(data: T) => T & {
+    id: string;
+    createdAt: Temporal.Instant;
+    updatedAt: Temporal.Instant;
+  },
 ) {
-  const from = Temporal.Now.zonedDateTimeISO().subtract({ days: SEED_PAST_DAYS });
+  const from = Temporal.Now.zonedDateTimeISO().subtract({
+    days: SEED_PAST_DAYS,
+  });
   const sessions = sessionsBetween(
     db.schedules.filter((schedule) => schedule.organizationId === organizationId),
     from,
@@ -301,7 +320,12 @@ function subscribe(listener: () => void) {
 
 export function insert<K extends Table>(table: K, data: NewRow<K>): Row<K> {
   const at = timestamp();
-  const row = { ...data, id: crypto.randomUUID(), createdAt: at, updatedAt: at } as Row<K>;
+  const row = {
+    ...data,
+    id: crypto.randomUUID(),
+    createdAt: at,
+    updatedAt: at,
+  } as Row<K>;
 
   write({ ...db, [table]: [...db[table], row] });
 
@@ -318,7 +342,10 @@ export function update<K extends Table>(table: K, id: string, patch: Partial<New
 
 // ponytail: no cascade — orphaned children are harmless in a mockup.
 export function remove<K extends Table>(table: K, id: string) {
-  write({ ...db, [table]: (db[table] as Row<K>[]).filter((row) => row.id !== id) });
+  write({
+    ...db,
+    [table]: (db[table] as Row<K>[]).filter((row) => row.id !== id),
+  });
 }
 
 export function reset() {

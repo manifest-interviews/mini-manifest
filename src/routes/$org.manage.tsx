@@ -1,11 +1,11 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/$org/manage")({ component: Manage });
+export const Route = createFileRoute("/$org/manage")({ component: Settings });
 
 const TAB_CLASS = "-mb-px px-1 pb-2";
 const ACTIVE_TAB = { className: "border-b-2 border-gray-900 font-semibold" };
 
-function Manage() {
+function Settings() {
   const { org } = Route.useParams();
 
   return (
@@ -17,7 +17,7 @@ function Manage() {
           activeProps={ACTIVE_TAB}
           className={TAB_CLASS}
         >
-          Organization settings
+          Organization
         </Link>
         <Link
           to="/$org/manage/products"

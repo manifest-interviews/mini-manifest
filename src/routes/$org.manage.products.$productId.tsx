@@ -19,6 +19,7 @@ function ProductPage() {
   const navigate = useNavigate();
 
   const [editing, setEditing] = useState<Schedule | "new" | null>(null);
+  const [pricesDirty, setPricesDirty] = useState(false);
 
   const product = useRows("products", org.id).find((row) => row.id === productId);
   const schedules = useRows("schedules", org.id).filter((row) => row.productId === productId);
@@ -29,10 +30,20 @@ function ProductPage() {
     return <p>Product not found.</p>;
   }
 
-  const setPrice = (channelId: string, amountCents: number) => {
+  // A blank field means "not sold": drop the row instead of storing a zero.
+  const setPrice = (channelId: string, value: string) => {
     const existing = prices.find(
       (price) => price.productId === productId && price.channelId === channelId,
     );
+
+    if (value === "") {
+      if (existing) {
+        remove("prices", existing.id);
+      }
+      return;
+    }
+
+    const amountCents = Math.round(Number(value) * CENTS_PER_UNIT);
 
     if (existing) {
       update("prices", existing.id, { amountCents });
@@ -92,39 +103,51 @@ function ProductPage() {
       <section>
         <h2 className="mb-2 font-semibold">Prices</h2>
 
-        <ul className="divide-y divide-gray-200 border border-gray-200 bg-white text-sm">
-          {channels.map((channel) => {
-            const price = prices.find(
-              (row) => row.productId === productId && row.channelId === channel.id,
-            );
+        {/* One form for the whole table: submit writes every changed row at once. */}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
 
-            return (
-              <li key={channel.id} className="flex items-center justify-between px-3 py-2">
-                <span>{channel.name}</span>
-                <span className="flex items-center gap-3">
-                  <span className="text-gray-500">
-                    {price ? formatMoney(price.amountCents) : "not sold"}
+            for (const channel of channels) {
+              setPrice(channel.id, String(form.get(channel.id) ?? "").trim());
+            }
+
+            setPricesDirty(false);
+          }}
+          onChange={() => setPricesDirty(true)}
+        >
+          <ul className="divide-y divide-gray-200 border border-gray-200 bg-white text-sm">
+            {channels.map((channel) => {
+              const price = prices.find(
+                (row) => row.productId === productId && row.channelId === channel.id,
+              );
+
+              return (
+                <li key={channel.id} className="flex items-center justify-between px-3 py-2">
+                  <span>{channel.name}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="text-gray-500">
+                      {price ? formatMoney(price.amountCents) : "not sold"}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      placeholder="—"
+                      name={channel.id}
+                      defaultValue={price ? price.amountCents / CENTS_PER_UNIT : ""}
+                      className="w-24 border border-gray-300 px-1"
+                    />
                   </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    placeholder="—"
-                    defaultValue={price ? price.amountCents / CENTS_PER_UNIT : ""}
-                    onBlur={(event) => {
-                      const value = event.currentTarget.value;
-                      if (value !== "") {
-                        setPrice(channel.id, Math.round(Number(value) * CENTS_PER_UNIT));
-                      }
-                    }}
-                    className="w-24 border border-gray-300 px-1"
-                  />
-                </span>
-              </li>
-            );
-          })}
-          {channels.length === 0 && <li className="px-3 py-2 text-gray-500">No channels yet.</li>}
-        </ul>
+                </li>
+              );
+            })}
+            {channels.length === 0 && <li className="px-3 py-2 text-gray-500">No channels yet.</li>}
+          </ul>
+
+          {pricesDirty && <button className={`mt-2 ${PRIMARY_BUTTON}`}>Save prices</button>}
+        </form>
       </section>
 
       <button

@@ -43,8 +43,8 @@ export function Modal({
       }`}
     >
       <div className="flex max-h-[85vh] flex-col">
-        <header className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-3">
-          <div>
+        <header className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+          <div className="flex-1">
             <h2 className="font-semibold">{title}</h2>
             {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
           </div>

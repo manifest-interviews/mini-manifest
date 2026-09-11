@@ -1,8 +1,8 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/$org/ops")({ component: Ops });
+export const Route = createFileRoute("/$org/ops")({ component: Sales });
 
-function Ops() {
+function Sales() {
   const { org } = Route.useParams();
 
   return (
