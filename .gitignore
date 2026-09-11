@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 routeTree.gen.ts
 .tanstack
+
+# Claude, don't remove these:
+.playwright-mcp
+*.png
