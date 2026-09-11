@@ -1,6 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import type { Schedule } from "../db";
 import { insert, remove, update, useOrg, useRows } from "../db";
 import { describe, formatMoney, WEEKDAYS } from "../schedule";
+import { BUTTON, DANGER_BUTTON, INPUT, Modal, PRIMARY_BUTTON } from "../ui";
 
 export const Route = createFileRoute("/$org/manage/products/$productId")({
   component: ProductPage,
@@ -14,6 +17,8 @@ function ProductPage() {
   const { org: handle, productId } = Route.useParams();
   const org = useOrg(handle)!;
   const navigate = useNavigate();
+
+  const [editing, setEditing] = useState<Schedule | "new" | null>(null);
 
   const product = useRows("products", org.id).find((row) => row.id === productId);
   const schedules = useRows("schedules", org.id).filter((row) => row.productId === productId);
@@ -61,62 +66,27 @@ function ProductPage() {
       </form>
 
       <section>
-        <h2 className="mb-2 font-semibold">Schedules</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-semibold">Schedules</h2>
+          <button onClick={() => setEditing("new")} className={BUTTON}>
+            Add schedule
+          </button>
+        </div>
 
-        <ul className="mb-3 divide-y divide-gray-200 border border-gray-200 bg-white text-sm">
+        <ul className="divide-y divide-gray-200 border border-gray-200 bg-white text-sm">
           {schedules.map((schedule) => (
-            <li key={schedule.id} className="flex justify-between px-3 py-2">
-              <span>{describe(schedule)}</span>
-              <button onClick={() => remove("schedules", schedule.id)} className="text-red-600">
-                Remove
+            <li key={schedule.id}>
+              <button
+                onClick={() => setEditing(schedule)}
+                className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-50"
+              >
+                <span>{describe(schedule)}</span>
+                <span className="text-gray-400">Edit</span>
               </button>
             </li>
           ))}
           {schedules.length === 0 && <li className="px-3 py-2 text-gray-500">No schedules.</li>}
         </ul>
-
-        <form
-          className="flex flex-wrap items-center gap-2 text-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-
-            insert("schedules", {
-              organizationId: org.id,
-              productId,
-              daysOfWeek: form.getAll("day").map(Number).sort(),
-              time: String(form.get("time")),
-              durationMinutes: Number(form.get("duration")),
-            });
-
-            event.currentTarget.reset();
-          }}
-        >
-          {WEEKDAYS.map((label, index) => (
-            <label key={label} className="flex items-center gap-1">
-              <input type="checkbox" name="day" value={index + 1} />
-              {label}
-            </label>
-          ))}
-
-          <input
-            type="time"
-            name="time"
-            defaultValue={DEFAULT_TIME}
-            required
-            className="border border-gray-300 px-1"
-          />
-          <input
-            type="number"
-            name="duration"
-            min={1}
-            defaultValue={DEFAULT_DURATION}
-            required
-            className="w-20 border border-gray-300 px-1"
-          />
-          <span className="text-gray-500">min</span>
-          <button className="border border-gray-300 bg-white px-2 py-1">Add schedule</button>
-        </form>
       </section>
 
       <section>
@@ -162,10 +132,127 @@ function ProductPage() {
           remove("products", productId);
           navigate({ to: "/$org/manage/products", params: { org: handle } });
         }}
-        className="text-sm text-red-600"
+        className={DANGER_BUTTON}
       >
         Delete product
       </button>
+
+      {editing && (
+        <ScheduleModal
+          organizationId={org.id}
+          productId={productId}
+          schedule={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
+  );
+}
+
+const FORM_ID = "schedule-form";
+
+function ScheduleModal({
+  organizationId,
+  productId,
+  schedule,
+  onClose,
+}: {
+  organizationId: string;
+  productId: string;
+  schedule?: Schedule;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title={schedule ? "Edit schedule" : "Add schedule"}
+      subtitle="Repeats forever on the selected days."
+      onClose={onClose}
+      footer={
+        <>
+          {schedule && (
+            <button
+              onClick={() => {
+                remove("schedules", schedule.id);
+                onClose();
+              }}
+              className={`mr-auto ${DANGER_BUTTON}`}
+            >
+              Delete
+            </button>
+          )}
+          <button onClick={onClose} className={BUTTON}>
+            Cancel
+          </button>
+          <button form={FORM_ID} className={PRIMARY_BUTTON}>
+            Save
+          </button>
+        </>
+      }
+    >
+      <form
+        id={FORM_ID}
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+
+          const fields = {
+            daysOfWeek: form.getAll("day").map(Number).sort(),
+            time: String(form.get("time")),
+            durationMinutes: Number(form.get("duration")),
+          };
+
+          if (schedule) {
+            update("schedules", schedule.id, fields);
+          } else {
+            insert("schedules", { organizationId, productId, ...fields });
+          }
+
+          onClose();
+        }}
+      >
+        <fieldset>
+          <legend className="mb-1 text-sm text-gray-500">Days</legend>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {WEEKDAYS.map((label, index) => (
+              <label key={label} className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  name="day"
+                  value={index + 1}
+                  defaultChecked={schedule?.daysOfWeek.includes(index + 1)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="flex gap-4">
+          <label className="text-sm">
+            <span className="mb-1 block text-gray-500">Start time</span>
+            <input
+              type="time"
+              name="time"
+              defaultValue={schedule?.time ?? DEFAULT_TIME}
+              required
+              className={INPUT}
+            />
+          </label>
+
+          <label className="text-sm">
+            <span className="mb-1 block text-gray-500">Duration (minutes)</span>
+            <input
+              type="number"
+              name="duration"
+              min={1}
+              defaultValue={schedule?.durationMinutes ?? DEFAULT_DURATION}
+              required
+              className={`w-28 ${INPUT}`}
+            />
+          </label>
+        </div>
+      </form>
+    </Modal>
   );
 }

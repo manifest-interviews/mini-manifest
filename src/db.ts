@@ -44,6 +44,8 @@ const price = z.object({
 const booking = z.object({
   ...tenant,
   productId: z.uuid(),
+  channelId: z.uuid(),
+  priceCents: z.int().nonnegative(), // the channel's price when the booking was taken
   start: instant,
   end: instant,
   customerName: z.string().min(1),
@@ -238,9 +240,15 @@ function seedBookings(
   ).slice(0, SEED_BOOKINGS_PER_ORG);
 
   sessions.forEach((session, index) => {
+    // Rotate through the channels the product is actually sold on.
+    const options = db.prices.filter((price) => price.productId === session.rule.productId);
+    const price = options[index % options.length];
+
     const booking = row({
       organizationId,
       productId: session.rule.productId,
+      channelId: price.channelId,
+      priceCents: price.amountCents,
       start: session.start.toInstant(),
       end: session.end.toInstant(),
       customerName: CUSTOMERS[index % CUSTOMERS.length],
@@ -252,9 +260,8 @@ function seedBookings(
       return; // awaiting payment
     }
 
-    const listed =
-      db.prices.find((price) => price.productId === booking.productId)?.amountCents ?? 0;
-    const amountCents = index % DEPOSIT_EVERY === 0 ? Math.round(listed / 2) : listed;
+    const amountCents =
+      index % DEPOSIT_EVERY === 0 ? Math.round(booking.priceCents / 2) : booking.priceCents;
 
     db.payments.push(row({ organizationId, bookingId: booking.id, amountCents }));
   });
