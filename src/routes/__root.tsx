@@ -7,10 +7,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootLayout() {
   return (
-    <div className="mx-auto max-w-2xl p-8">
+    <div className="mx-auto max-w-3xl p-8">
       <nav className="mb-8 flex gap-4">
-        <Link to="/">Home</Link>
-        <Link to="/about">About</Link>
+        <Link to="/">Organizations</Link>
       </nav>
       <Outlet />
     </div>

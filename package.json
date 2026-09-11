@@ -8,6 +8,7 @@
     "build": "vite build && tsc -b",
     "typecheck": "tsc -b",
     "lint": "oxlint",
+    "check": "node --experimental-strip-types src/schedule.check.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "preview": "vite preview"
@@ -18,6 +19,7 @@
     "@tanstack/react-router": "^1.170.35",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "temporal-polyfill": "^1.0.4",
     "zod": "^4.6.2"
   },
   "devDependencies": {
