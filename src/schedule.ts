@@ -58,11 +58,22 @@ export function occurrences(
 }
 
 /** Human-readable local time for a stored instant. */
-export function formatInstant(iso: string): string {
-  return Temporal.Instant.from(iso).toZonedDateTimeISO(timeZone()).toLocaleString(undefined, {
+export function formatInstant(instant: Temporal.Instant): string {
+  return instant.toZonedDateTimeISO(timeZone()).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+/**
+ * Intl refuses to format an iso8601-calendar PlainYearMonth against a Gregorian
+ * locale ("Mismatched calendars"); a ZonedDateTime formats fine.
+ */
+export function formatMonth(month: Temporal.PlainYearMonth): string {
+  return month
+    .toPlainDate({ day: 1 })
+    .toZonedDateTime(timeZone())
+    .toLocaleString(undefined, { year: "numeric", month: "long" });
 }
 
 export function describe(rule: Recurrence): string {
@@ -72,6 +83,39 @@ export function describe(rule: Recurrence): string {
 
 export function formatMoney(cents: number): string {
   return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+/** Every occurrence of every rule inside [from, until), chronologically. */
+export function sessionsBetween<T extends Recurrence>(
+  rules: T[],
+  from: Temporal.ZonedDateTime,
+  until: Temporal.ZonedDateTime,
+): (Occurrence & { rule: T })[] {
+  const found: (Occurrence & { rule: T })[] = [];
+
+  for (
+    let day = from.startOfDay();
+    Temporal.ZonedDateTime.compare(day, until) < 0;
+    day = day.add({ days: 1 })
+  ) {
+    for (const rule of rules) {
+      if (!rule.daysOfWeek.includes(day.dayOfWeek)) {
+        continue;
+      }
+
+      const start = day.withPlainTime(Temporal.PlainTime.from(rule.time));
+      if (
+        Temporal.ZonedDateTime.compare(start, from) < 0 ||
+        Temporal.ZonedDateTime.compare(start, until) >= 0
+      ) {
+        continue;
+      }
+
+      found.push({ start, end: start.add({ minutes: rule.durationMinutes }), rule });
+    }
+  }
+
+  return found.sort((a, b) => Temporal.ZonedDateTime.compare(a.start, b.start));
 }
 
 /** Merged, chronologically sorted occurrences across several recurrences. */

@@ -1,42 +1,64 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { useOrg } from "../db";
+import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { useOrg, useTable } from "../db";
 
-export const Route = createFileRoute("/$org")({ component: OrgLayout });
+export const Route = createFileRoute("/$org")({ component: OrgShell });
 
-const TABS = [
-  { to: "/$org", label: "Overview", exact: true },
-  { to: "/$org/products", label: "Products", exact: false },
-  { to: "/$org/channels", label: "Channels & prices", exact: false },
-  { to: "/$org/bookings", label: "Bookings", exact: false },
-] as const;
-
-function OrgLayout() {
+function OrgShell() {
   const { org: handle } = Route.useParams();
+  const navigate = useNavigate();
+
+  const orgs = useTable("organizations");
   const org = useOrg(handle);
 
   if (!org) {
-    return <p>No organization “{handle}”.</p>;
+    return <p className="p-6">No organization “{handle}”.</p>;
   }
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-bold">{org.name}</h1>
-
-      <nav className="flex gap-4 border-b border-gray-200 pb-2 text-sm">
-        {TABS.map((tab) => (
-          <Link
-            key={tab.label}
-            to={tab.to}
-            params={{ org: handle }}
-            activeOptions={{ exact: tab.exact }}
-            activeProps={{ className: "font-semibold underline" }}
+    <>
+      <header className="flex h-14 items-center gap-8 border-b border-gray-200 bg-white px-6">
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-gray-500">Organization</span>
+          <select
+            value={org.handle}
+            onChange={(event) =>
+              navigate({ to: "/$org/ops/schedule", params: { org: event.target.value } })
+            }
+            className="border border-gray-300 px-2 py-1"
           >
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+            {orgs.map((option) => (
+              <option key={option.id} value={option.handle}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
-      <Outlet />
-    </section>
+        <nav className="flex gap-6 text-sm">
+          <Link
+            to="/$org/ops"
+            params={{ org: handle }}
+            activeProps={{ className: "font-semibold" }}
+          >
+            Ops
+          </Link>
+          <Link
+            to="/$org/manage"
+            params={{ org: handle }}
+            activeProps={{ className: "font-semibold" }}
+          >
+            Manage
+          </Link>
+        </nav>
+
+        <Link to="/" className="ml-auto text-sm text-gray-500">
+          All organizations
+        </Link>
+      </header>
+
+      <main className="p-6">
+        <Outlet />
+      </main>
+    </>
   );
 }

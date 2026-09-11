@@ -1,7 +1,7 @@
 // Self-check for the recurrence expansion: node --experimental-strip-types src/schedule.check.ts
 import assert from "node:assert/strict";
 import { Temporal } from "temporal-polyfill";
-import { occurrences, type Recurrence } from "./schedule.ts";
+import { occurrences, type Recurrence, sessionsBetween } from "./schedule.ts";
 
 const mwf: Recurrence = { daysOfWeek: [1, 3, 5], time: "09:00", durationMinutes: 90 };
 const sunday = Temporal.ZonedDateTime.from("2026-09-13T12:00[America/Los_Angeles]");
@@ -27,5 +27,16 @@ assert.equal(
 
 // No weekdays selected: terminates instead of scanning forever.
 assert.deepEqual(occurrences({ ...mwf, daysOfWeek: [] }, sunday, 5), []);
+
+// A bounded window returns every matching slot from every rule, in order.
+const window = sessionsBetween(
+  [mwf, { daysOfWeek: [1], time: "18:00", durationMinutes: 30 }],
+  Temporal.ZonedDateTime.from("2026-09-14T00:00[America/Los_Angeles]"),
+  Temporal.ZonedDateTime.from("2026-09-17T00:00[America/Los_Angeles]"),
+);
+assert.deepEqual(
+  window.map((slot) => slot.start.toString({ timeZoneName: "never" })),
+  ["2026-09-14T09:00:00-07:00", "2026-09-14T18:00:00-07:00", "2026-09-16T09:00:00-07:00"],
+);
 
 console.log("schedule.check ok");

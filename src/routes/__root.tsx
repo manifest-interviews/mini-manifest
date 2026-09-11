@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, Link, Outlet } from "@tanstack/react-router";
+import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootLayout,
@@ -7,10 +7,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootLayout() {
   return (
-    <div className="mx-auto max-w-3xl p-8">
-      <nav className="mb-8 flex gap-4">
-        <Link to="/">Organizations</Link>
-      </nav>
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <Outlet />
     </div>
   );

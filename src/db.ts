@@ -1,15 +1,21 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { Temporal } from "temporal-polyfill";
+import { sessionsBetween } from "./schedule";
 import { z } from "zod";
 
 // ponytail: the whole "database" is one JSON blob in localStorage, read and
 // written synchronously. It's a mockup; swap for a real API when there is one.
 const STORAGE_KEY = "mini-manifest/v1";
 
+// Timestamps and booking times are Temporal.Instant everywhere in the app;
+// the schema is the only place that knows they are ISO strings on disk.
+// (Instant.toJSON writes them back out, so JSON.stringify round-trips.)
+const instant = z.iso.datetime().transform((value) => Temporal.Instant.from(value));
+
 const stamps = {
   id: z.uuid(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
+  createdAt: instant,
+  updatedAt: instant,
 };
 
 // Everything except the organization itself is scoped to one tenant.
@@ -38,8 +44,8 @@ const price = z.object({
 const booking = z.object({
   ...tenant,
   productId: z.uuid(),
-  start: z.iso.datetime(),
-  end: z.iso.datetime(),
+  start: instant,
+  end: instant,
   customerName: z.string().min(1),
 });
 
@@ -78,8 +84,180 @@ const EMPTY: Db = {
   payments: [],
 };
 
-function timestamp(): string {
-  return Temporal.Now.instant().toString();
+function timestamp(): Temporal.Instant {
+  return Temporal.Now.instant();
+}
+
+/**
+ * Demo data: two tenants, each with products, channels, prices and ~two dozen
+ * bookings spread over the sessions around today.
+ * ponytail: deterministic, no RNG — the same mockup every reset.
+ */
+type OrgSeed = {
+  handle: string;
+  name: string;
+  channels: string[];
+  products: {
+    name: string;
+    daysOfWeek: number[];
+    time: string;
+    durationMinutes: number;
+    prices: (number | null)[]; // one entry per channel, null = not sold there
+  }[];
+};
+
+const SEEDS: OrgSeed[] = [
+  {
+    handle: "acme-tours",
+    name: "Acme Tours",
+    channels: ["Direct", "Website", "OTA Partner"],
+    products: [
+      {
+        name: "Sunset Kayak Tour",
+        daysOfWeek: [1, 3, 5],
+        time: "09:00",
+        durationMinutes: 90,
+        prices: [8000, 8500, 9500],
+      },
+      {
+        name: "City Bike Ride",
+        daysOfWeek: [6, 7],
+        time: "14:00",
+        durationMinutes: 120,
+        prices: [3500, 4000, null],
+      },
+    ],
+  },
+  {
+    handle: "harbor-cruises",
+    name: "Harbor Cruises",
+    channels: ["Direct", "Website", "Walk-up"],
+    products: [
+      {
+        name: "Harbor Sunset Cruise",
+        daysOfWeek: [4, 5, 6, 7],
+        time: "18:00",
+        durationMinutes: 120,
+        prices: [6000, 6500, 7000],
+      },
+      {
+        name: "Whale Watching",
+        daysOfWeek: [6, 7],
+        time: "08:00",
+        durationMinutes: 240,
+        prices: [11000, 12000, null],
+      },
+    ],
+  },
+];
+
+const CUSTOMERS = [
+  "Ada Lovelace",
+  "Grace Hopper",
+  "Alan Turing",
+  "Katherine Johnson",
+  "Linus Vega",
+  "Mina Okafor",
+  "Tom Hall",
+  "Rosa Delgado",
+  "Hiro Tanaka",
+  "Nora Bright",
+  "Sam Okada",
+  "Priya Raman",
+];
+
+const SEED_BOOKINGS_PER_ORG = 24;
+const SEED_PAST_DAYS = 14; // bookings start two weeks back, so past and upcoming are both filled
+const SEED_WINDOW_DAYS = 56;
+const UNPAID_EVERY = 5; // every 5th booking is still unpaid
+const DEPOSIT_EVERY = 3; // every 3rd booking has paid half
+
+function seed(): Db {
+  const at = timestamp();
+  const row = <T>(data: T) => ({ ...data, id: crypto.randomUUID(), createdAt: at, updatedAt: at });
+  const db: Db = structuredClone(EMPTY);
+
+  for (const spec of SEEDS) {
+    const org = row({ handle: spec.handle, name: spec.name });
+    const organizationId = org.id;
+
+    const channels = spec.channels.map((name) => row({ organizationId, name }));
+
+    const products = spec.products.map((productSpec) => {
+      const product = row({ organizationId, name: productSpec.name });
+
+      db.schedules.push(
+        row({
+          organizationId,
+          productId: product.id,
+          daysOfWeek: productSpec.daysOfWeek,
+          time: productSpec.time,
+          durationMinutes: productSpec.durationMinutes,
+        }),
+      );
+
+      productSpec.prices.forEach((amountCents, index) => {
+        if (amountCents === null) {
+          return;
+        }
+
+        db.prices.push(
+          row({
+            organizationId,
+            productId: product.id,
+            channelId: channels[index].id,
+            amountCents,
+          }),
+        );
+      });
+
+      return product;
+    });
+
+    db.organizations.push(org);
+    db.channels.push(...channels);
+    db.products.push(...products);
+
+    seedBookings(db, organizationId, row);
+  }
+
+  return db;
+}
+
+/** Fills sessions around today with bookings, most of them paid. */
+function seedBookings(
+  db: Db,
+  organizationId: string,
+  row: <T>(data: T) => T & { id: string; createdAt: Temporal.Instant; updatedAt: Temporal.Instant },
+) {
+  const from = Temporal.Now.zonedDateTimeISO().subtract({ days: SEED_PAST_DAYS });
+  const sessions = sessionsBetween(
+    db.schedules.filter((schedule) => schedule.organizationId === organizationId),
+    from,
+    from.add({ days: SEED_WINDOW_DAYS }),
+  ).slice(0, SEED_BOOKINGS_PER_ORG);
+
+  sessions.forEach((session, index) => {
+    const booking = row({
+      organizationId,
+      productId: session.rule.productId,
+      start: session.start.toInstant(),
+      end: session.end.toInstant(),
+      customerName: CUSTOMERS[index % CUSTOMERS.length],
+    });
+
+    db.bookings.push(booking);
+
+    if (index % UNPAID_EVERY === 0) {
+      return; // awaiting payment
+    }
+
+    const listed =
+      db.prices.find((price) => price.productId === booking.productId)?.amountCents ?? 0;
+    const amountCents = index % DEPOSIT_EVERY === 0 ? Math.round(listed / 2) : listed;
+
+    db.payments.push(row({ organizationId, bookingId: booking.id, amountCents }));
+  });
 }
 
 function read(): Db {
@@ -162,47 +340,4 @@ export function useRows<K extends Exclude<Table, "organizations">>(
 export function useOrg(handle: string): Organization | undefined {
   const orgs = useTable("organizations");
   return orgs.find((org) => org.handle === handle);
-}
-
-/** Demo tenant so the app has something to show on first load. */
-function seed(): Db {
-  const at = timestamp();
-  const row = <T>(data: T) => ({ ...data, id: crypto.randomUUID(), createdAt: at, updatedAt: at });
-
-  const org = row({ handle: "acme-tours", name: "Acme Tours" });
-  const organizationId = org.id;
-
-  const kayak = row({ organizationId, name: "Sunset Kayak Tour" });
-  const bike = row({ organizationId, name: "City Bike Ride" });
-
-  const web = row({ organizationId, name: "Website" });
-  const ota = row({ organizationId, name: "OTA Partner" });
-
-  return {
-    ...EMPTY,
-    organizations: [org],
-    products: [kayak, bike],
-    channels: [web, ota],
-    schedules: [
-      row({
-        organizationId,
-        productId: kayak.id,
-        daysOfWeek: [1, 3, 5],
-        time: "09:00",
-        durationMinutes: 90,
-      }),
-      row({
-        organizationId,
-        productId: bike.id,
-        daysOfWeek: [6, 7],
-        time: "14:00",
-        durationMinutes: 120,
-      }),
-    ],
-    prices: [
-      row({ organizationId, productId: kayak.id, channelId: web.id, amountCents: 8500 }),
-      row({ organizationId, productId: kayak.id, channelId: ota.id, amountCents: 9500 }),
-      row({ organizationId, productId: bike.id, channelId: web.id, amountCents: 4000 }),
-    ],
-  };
 }

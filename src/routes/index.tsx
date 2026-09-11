@@ -1,27 +1,26 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { insert, remove, reset, useTable } from "../db";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { insert, useTable } from "../db";
 
 export const Route = createFileRoute("/")({ component: Organizations });
 
 function Organizations() {
   const orgs = useTable("organizations");
+  const navigate = useNavigate();
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-bold">Organizations</h1>
+    <div className="mx-auto max-w-md space-y-4 p-10">
+      <h1 className="text-xl font-semibold">Organizations</h1>
 
-      <ul className="divide-y divide-gray-200 border-y border-gray-200">
+      <ul className="divide-y divide-gray-200 border border-gray-200 bg-white">
         {orgs.map((org) => (
-          <li key={org.id} className="flex items-center justify-between py-2">
-            <Link to="/$org" params={{ org: org.handle }} className="underline">
-              {org.name} <span className="text-gray-500">/{org.handle}</span>
-            </Link>
-            <button
-              onClick={() => remove("organizations", org.id)}
-              className="text-sm text-red-600"
+          <li key={org.id}>
+            <Link
+              to="/$org/ops/schedule"
+              params={{ org: org.handle }}
+              className="block px-3 py-2 hover:bg-gray-50"
             >
-              Delete
-            </button>
+              {org.name} <span className="text-sm text-gray-500">/{org.handle}</span>
+            </Link>
           </li>
         ))}
       </ul>
@@ -31,21 +30,28 @@ function Organizations() {
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
-          insert("organizations", {
+          const org = insert("organizations", {
             name: String(form.get("name")),
             handle: String(form.get("handle")),
           });
-          event.currentTarget.reset();
+
+          navigate({ to: "/$org/manage/settings", params: { org: org.handle } });
         }}
       >
-        <input name="name" placeholder="Name" required className="border px-2 py-1" />
-        <input name="handle" placeholder="handle" required className="border px-2 py-1" />
-        <button className="border bg-gray-900 px-3 py-1 text-white">Add</button>
+        <input
+          name="name"
+          required
+          placeholder="Name"
+          className="border border-gray-300 px-2 py-1 text-sm"
+        />
+        <input
+          name="handle"
+          required
+          placeholder="handle"
+          className="w-28 border border-gray-300 px-2 py-1 text-sm"
+        />
+        <button className="bg-gray-900 px-3 py-1.5 text-sm text-white">Add</button>
       </form>
-
-      <button onClick={reset} className="text-sm text-gray-500 underline">
-        Reset demo data
-      </button>
-    </section>
+    </div>
   );
 }
