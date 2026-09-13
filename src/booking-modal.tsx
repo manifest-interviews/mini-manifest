@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { Combobox } from "@base-ui/react/combobox";
+import { useMemo, useState } from "react";
 import { Temporal } from "temporal-polyfill";
-import type { Booking, Organization, Schedule } from "./db";
-import { insert, remove, useRows } from "./db";
+import type { Booking, Customer, Organization, Schedule } from "./db";
+import { insert, remove, useCustomer, useRows } from "./db";
 import type { Occurrence } from "./schedule";
 import { formatMoney, formatMonth, sessionsBetween, timeZone, WEEKDAYS } from "./schedule";
-import { BUTTON, DANGER_BUTTON, INPUT, Modal, PRIMARY_BUTTON } from "./ui";
+import { useModalContainer } from "./modal-container";
+import { BUTTON, DANGER_BUTTON, INPUT, MemberBadge, Modal, PRIMARY_BUTTON } from "./ui";
 
 const CENTS_PER_UNIT = 100;
 
 const ADD_FORM_ID = "add-booking-form";
 const DAYS_IN_WEEK = 7;
 const DEFAULT_CHANNEL = "Direct";
+const CREATE_ID = "create-customer"; // the "add <typed name>" row in the customer list
 
 /**
  * Product → date → session time → customer → cash taken, in one panel.
@@ -29,6 +32,7 @@ export function AddBookingModal({
   const schedules = useRows("schedules", org.id);
   const prices = useRows("prices", org.id);
   const channels = useRows("channels", org.id);
+  const customers = useRows("customers", org.id);
 
   const [channelId, setChannelId] = useState(
     () => (channels.find((channel) => channel.name === DEFAULT_CHANNEL) ?? channels[0])?.id ?? "",
@@ -39,6 +43,13 @@ export function AddBookingModal({
   );
   const [session, setSession] = useState<Occurrence | null>(preset?.session ?? null);
   const [booked, setBooked] = useState<Booking | null>(null);
+  const [customerName, setCustomerName] = useState("");
+
+  // The typed name is the whole customer field: it either matches an existing
+  // customer (shown as a member badge) or becomes a new one on submit.
+  const customer = customers.find(
+    (row) => row.name.toLowerCase() === customerName.trim().toLowerCase(),
+  );
 
   const productSchedules = schedules.filter((schedule) => schedule.productId === productId);
   const daySessions = date
@@ -75,7 +86,7 @@ export function AddBookingModal({
           </button>
           <button
             form={ADD_FORM_ID}
-            disabled={!session || !price}
+            disabled={!session || !price || !customerName.trim()}
             className={`${PRIMARY_BUTTON} disabled:opacity-40`}
           >
             Book
@@ -93,6 +104,14 @@ export function AddBookingModal({
           }
 
           const form = new FormData(event.currentTarget);
+          const buyer =
+            customer ??
+            insert("customers", {
+              organizationId: org.id,
+              name: customerName.trim(),
+              isMember: false,
+            });
+
           const booking = insert("bookings", {
             organizationId: org.id,
             productId,
@@ -100,7 +119,7 @@ export function AddBookingModal({
             priceCents: price.amountCents,
             start: session.start.toInstant(),
             end: session.end.toInstant(),
-            customerName: String(form.get("customerName")),
+            customerId: buyer.id,
           });
 
           const amountCents = Math.round(Number(form.get("amount")) * CENTS_PER_UNIT);
@@ -192,14 +211,102 @@ export function AddBookingModal({
           </div>
         </div>
 
-        <label className="block text-sm">
-          <span className="mb-1 block text-gray-500">Customer name</span>
-          <input name="customerName" required className={`w-full ${INPUT}`} />
-        </label>
+        <CustomerField
+          customers={customers}
+          name={customerName}
+          selected={customer}
+          onNameChange={setCustomerName}
+        />
 
         <PaymentPanel label="Total due" dueCents={price?.amountCents ?? null} />
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Customer picker: search the existing customers, or type a name that is not in
+ * the list and pick the "Add …" row to create one when the booking is taken.
+ */
+function CustomerField({
+  customers,
+  name,
+  selected,
+  onNameChange,
+}: {
+  customers: Customer[];
+  name: string;
+  selected: Customer | undefined;
+  onNameChange: (name: string) => void;
+}) {
+  const container = useModalContainer();
+  const typed = name.trim();
+
+  const items = useMemo(
+    () =>
+      Combobox.createItems(
+        typed && !customers.some((row) => row.name.toLowerCase() === typed.toLowerCase())
+          ? [...customers, { id: CREATE_ID, name: typed, isMember: false } as Customer]
+          : customers,
+        { getValue: (customer: Customer) => customer.id, getLabel: (customer) => customer.name },
+      ),
+    [customers, typed],
+  );
+
+  return (
+    <Combobox.Root
+      items={items}
+      value={selected?.id ?? null}
+      inputValue={name}
+      onInputValueChange={onNameChange}
+      onValueChange={(id) => {
+        const picked = customers.find((customer) => customer.id === id);
+        onNameChange(picked ? picked.name : typed);
+      }}
+    >
+      <div className="text-sm">
+        <label className="mb-1 flex items-center gap-2 text-gray-500">
+          Customer
+          {selected?.isMember && <MemberBadge />}
+          {selected && !selected.isMember && <span className="text-xs">Not a member</span>}
+        </label>
+
+        <Combobox.InputGroup className="relative block w-full">
+          <Combobox.Input placeholder="Search or type a new name" className={`w-full ${INPUT}`} />
+          <Combobox.Trigger
+            aria-label="Open customer list"
+            className="absolute top-0 right-0 flex h-full w-8 items-center justify-center text-gray-400"
+          >
+            ▾
+          </Combobox.Trigger>
+        </Combobox.InputGroup>
+      </div>
+
+      <Combobox.Portal container={container}>
+        <Combobox.Positioner sideOffset={4} className="z-10">
+          <Combobox.Popup className="max-h-64 w-[var(--anchor-width)] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg">
+            <Combobox.Empty className="px-3 py-2 text-gray-500 empty:hidden">
+              No customers.
+            </Combobox.Empty>
+
+            <Combobox.List>
+              {(customer: Customer) => (
+                <Combobox.Item
+                  key={customer.id}
+                  value={customer.id}
+                  className="flex cursor-default items-center justify-between gap-2 px-3 py-2 data-highlighted:bg-gray-100"
+                >
+                  <span>
+                    {customer.id === CREATE_ID ? `Add “${customer.name}”` : customer.name}
+                  </span>
+                  {customer.isMember && <MemberBadge />}
+                </Combobox.Item>
+              )}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   );
 }
 
@@ -215,6 +322,7 @@ export function BookingDetailsModal({
 }) {
   const products = useRows("products", booking.organizationId);
   const channels = useRows("channels", booking.organizationId);
+  const customer = useCustomer(booking.organizationId)(booking.customerId);
   const payments = useRows("payments", booking.organizationId).filter(
     (payment) => payment.bookingId === booking.id,
   );
@@ -230,7 +338,12 @@ export function BookingDetailsModal({
   return (
     <Modal
       wide
-      title={booking.customerName}
+      title={
+        <span className="flex items-center gap-2">
+          {customer?.name ?? "?"}
+          {customer?.isMember && <MemberBadge />}
+        </span>
+      }
       subtitle={
         <span className="mt-3 flex flex-wrap gap-x-10 gap-y-3 rounded-lg bg-gray-50 px-4 py-2.5">
           <Fact

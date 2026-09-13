@@ -38,6 +38,8 @@ const schedule = z.object({
 
 const channel = z.object({ ...tenant, name: z.string().min(1) });
 
+const customer = z.object({ ...tenant, name: z.string().min(1), isMember: z.boolean() });
+
 const price = z.object({
   ...tenant,
   channelId: z.uuid(),
@@ -52,7 +54,7 @@ const booking = z.object({
   priceCents: z.int().nonnegative(), // the channel's price when the booking was taken
   start: instant,
   end: instant,
-  customerName: z.string().min(1),
+  customerId: z.uuid(),
 });
 
 const payment = z.object({
@@ -66,6 +68,7 @@ const dbSchema = z.object({
   products: z.array(product),
   schedules: z.array(schedule),
   channels: z.array(channel),
+  customers: z.array(customer),
   prices: z.array(price),
   bookings: z.array(booking),
   payments: z.array(payment),
@@ -80,6 +83,7 @@ export type Organization = Row<"organizations">;
 export type Product = Row<"products">;
 export type Schedule = Row<"schedules">;
 export type Channel = Row<"channels">;
+export type Customer = Row<"customers">;
 export type Price = Row<"prices">;
 export type Booking = Row<"bookings">;
 export type Payment = Row<"payments">;
@@ -89,6 +93,7 @@ const EMPTY: Db = {
   products: [],
   schedules: [],
   channels: [],
+  customers: [],
   prices: [],
   bookings: [],
   payments: [],
@@ -176,6 +181,7 @@ const CUSTOMERS = [
   "Priya Raman",
 ];
 
+const MEMBER_EVERY = 4; // every 4th seeded customer is a member
 const SEED_BOOKINGS_PER_ORG = 24;
 const SEED_PAST_DAYS = 14; // bookings start two weeks back, so past and upcoming are both filled
 const SEED_WINDOW_DAYS = 56;
@@ -229,6 +235,12 @@ function seed(): Db {
       return product;
     });
 
+    db.customers.push(
+      ...CUSTOMERS.map((name, index) =>
+        row({ organizationId, name, isMember: index % MEMBER_EVERY === 0 }),
+      ),
+    );
+
     db.organizations.push(org);
     db.channels.push(...channels);
     db.products.push(...products);
@@ -252,6 +264,7 @@ function seedBookings(
   const from = Temporal.Now.zonedDateTimeISO().subtract({
     days: SEED_PAST_DAYS,
   });
+  const customers = db.customers.filter((customer) => customer.organizationId === organizationId);
   const sessions = sessionsBetween(
     db.schedules.filter((schedule) => schedule.organizationId === organizationId),
     from,
@@ -270,7 +283,7 @@ function seedBookings(
       priceCents: price.amountCents,
       start: session.start.toInstant(),
       end: session.end.toInstant(),
-      customerName: CUSTOMERS[index % CUSTOMERS.length],
+      customerId: customers[index % customers.length].id,
     });
 
     db.bookings.push(booking);
@@ -369,6 +382,12 @@ export function useRows<K extends Exclude<Table, "organizations">>(
     () => rows.filter((row) => row.organizationId === organizationId),
     [rows, organizationId],
   );
+}
+
+/** Row lookup for the id-only customer reference on bookings. */
+export function useCustomer(organizationId: string) {
+  const customers = useRows("customers", organizationId);
+  return (id: string) => customers.find((customer) => customer.id === id);
 }
 
 export function useOrg(handle: string): Organization | undefined {

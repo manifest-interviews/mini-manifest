@@ -24,6 +24,14 @@ function Sales() {
         >
           Bookings
         </Link>
+        <Link
+          to="/$org/ops/customers"
+          params={{ org }}
+          activeProps={{ className: "border-b-2 border-gray-900 font-semibold" }}
+          className="-mb-px px-1 pb-2"
+        >
+          Customers
+        </Link>
       </nav>
 
       <Outlet />

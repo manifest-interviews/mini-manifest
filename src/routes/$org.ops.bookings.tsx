@@ -3,9 +3,9 @@ import { useState } from "react";
 import { Temporal } from "temporal-polyfill";
 import { AddBookingModal, BookingDetailsModal } from "../booking-modal";
 import type { Booking } from "../db";
-import { useOrg, useRows } from "../db";
+import { useCustomer, useOrg, useRows } from "../db";
 import { formatInstant, formatMoney } from "../schedule";
-import { BUTTON, PRIMARY_BUTTON } from "../ui";
+import { BUTTON, MemberBadge, PRIMARY_BUTTON } from "../ui";
 
 export const Route = createFileRoute("/$org/ops/bookings")({ component: BookingsList });
 
@@ -19,6 +19,7 @@ function BookingsList() {
   const channels = useRows("channels", org.id);
   const bookings = useRows("bookings", org.id);
   const payments = useRows("payments", org.id);
+  const customer = useCustomer(org.id);
 
   const [page, setPage] = useState(0);
   const [adding, setAdding] = useState(false);
@@ -64,7 +65,10 @@ function BookingsList() {
 
             return (
               <tr key={booking.id} className="border-t border-gray-200 hover:bg-gray-50">
-                <td className="px-3 py-2">{booking.customerName}</td>
+                <td className="flex items-center gap-2 px-3 py-2">
+                  {customer(booking.customerId)?.name ?? "?"}
+                  {customer(booking.customerId)?.isMember && <MemberBadge />}
+                </td>
                 <td className="px-3 py-2">{productName(booking.productId)}</td>
                 <td className="px-3 py-2 text-gray-500">{channelName(booking.channelId)}</td>
                 <td className="px-3 py-2">{formatInstant(booking.start)}</td>

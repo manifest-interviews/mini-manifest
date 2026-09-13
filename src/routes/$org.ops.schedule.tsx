@@ -3,9 +3,9 @@ import { useMemo, useState } from "react";
 import { Temporal } from "temporal-polyfill";
 import { AddBookingModal } from "../booking-modal";
 import type { Schedule } from "../db";
-import { useOrg, useRows } from "../db";
+import { useCustomer, useOrg, useRows } from "../db";
 import { formatMoney, formatMonth, sessionsBetween, timeZone, WEEKDAYS } from "../schedule";
-import { BUTTON, Modal, PRIMARY_BUTTON } from "../ui";
+import { BUTTON, MemberBadge, Modal, PRIMARY_BUTTON } from "../ui";
 
 type Session = { rule: Schedule; start: Temporal.ZonedDateTime; end: Temporal.ZonedDateTime };
 
@@ -190,6 +190,7 @@ function SessionModal({
   const organizationId = session.rule.organizationId;
 
   const channels = useRows("channels", organizationId);
+  const customer = useCustomer(organizationId);
   const payments = useRows("payments", organizationId);
   const prices = useRows("prices", organizationId).filter(
     (price) => price.productId === session.rule.productId,
@@ -236,7 +237,10 @@ function SessionModal({
           <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 text-sm">
             {bookings.map((booking) => (
               <li key={booking.id} className="flex items-center justify-between px-3 py-2">
-                <span>{booking.customerName}</span>
+                <span className="flex items-center gap-2">
+                  {customer(booking.customerId)?.name ?? "?"}
+                  {customer(booking.customerId)?.isMember && <MemberBadge />}
+                </span>
                 {paidFor(booking.id) > 0 ? (
                   <span className="text-gray-500">{formatMoney(paidFor(booking.id))}</span>
                 ) : (
