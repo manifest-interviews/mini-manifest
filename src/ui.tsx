@@ -59,7 +59,7 @@ export function Modal({
             <button
               onClick={() => dialog.current?.close()}
               aria-label="Close"
-              className="text-xl leading-none text-gray-400 hover:text-gray-600"
+              className="-mt-4 -mr-5 rounded-tr-xl p-3 text-xl leading-none text-gray-400 hover:text-gray-600"
             >
               ×
             </button>
