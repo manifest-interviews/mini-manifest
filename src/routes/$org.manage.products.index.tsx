@@ -19,9 +19,13 @@ function ProductList() {
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
+          const name = String(form.get("name"));
           const product = insert("products", {
             organizationId: org.id,
-            name: String(form.get("name")),
+            name,
+            // Placeholder photo keyed off the name, so new products look like the
+            // seeded ones. Swap for a real upload if the product ever needs one.
+            imageUrl: `https://loremflickr.com/800/600/${encodeURIComponent(name)}?lock=1`,
           });
 
           navigate({

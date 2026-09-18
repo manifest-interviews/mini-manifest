@@ -190,6 +190,9 @@ function SessionModal({
   const organizationId = session.rule.organizationId;
 
   const channels = useRows("channels", organizationId);
+  const product = useRows("products", organizationId).find(
+    (row) => row.id === session.rule.productId,
+  );
   const customer = useCustomer(organizationId);
   const payments = useRows("payments", organizationId);
   const prices = useRows("prices", organizationId).filter(
@@ -222,6 +225,14 @@ function SessionModal({
       }
     >
       <div className="space-y-5">
+        {product?.imageUrl && (
+          <img
+            src={product.imageUrl}
+            alt={productName}
+            className="h-44 w-full rounded-lg object-cover"
+          />
+        )}
+
         <dl className="grid grid-cols-3 divide-x divide-gray-200 rounded-lg bg-gray-50 text-center">
           <Stat label="Booked" value={String(bookings.length)} />
           <Stat

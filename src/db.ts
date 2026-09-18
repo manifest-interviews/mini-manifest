@@ -26,7 +26,7 @@ const organization = z.object({
   handle: z.string().min(1),
   name: z.string().min(1),
 });
-const product = z.object({ ...tenant, name: z.string().min(1) });
+const product = z.object({ ...tenant, name: z.string().min(1), imageUrl: z.url() });
 
 const schedule = z.object({
   ...tenant,
@@ -114,6 +114,7 @@ type OrgSeed = {
   channels: string[];
   products: {
     name: string;
+    imageUrl: string;
     daysOfWeek: number[];
     time: string;
     durationMinutes: number;
@@ -129,6 +130,7 @@ const SEEDS: OrgSeed[] = [
     products: [
       {
         name: "Sunset Kayak Tour",
+        imageUrl: "https://loremflickr.com/800/600/kayak,sunset?lock=1",
         daysOfWeek: [1, 3, 5],
         time: "09:00",
         durationMinutes: 90,
@@ -136,6 +138,7 @@ const SEEDS: OrgSeed[] = [
       },
       {
         name: "City Bike Ride",
+        imageUrl: "https://loremflickr.com/800/600/bicycle,city?lock=2",
         daysOfWeek: [6, 7],
         time: "14:00",
         durationMinutes: 120,
@@ -150,6 +153,7 @@ const SEEDS: OrgSeed[] = [
     products: [
       {
         name: "Harbor Sunset Cruise",
+        imageUrl: "https://loremflickr.com/800/600/harbor,boat?lock=3",
         daysOfWeek: [4, 5, 6, 7],
         time: "18:00",
         durationMinutes: 120,
@@ -157,6 +161,7 @@ const SEEDS: OrgSeed[] = [
       },
       {
         name: "Whale Watching",
+        imageUrl: "https://loremflickr.com/800/600/whale,ocean?lock=4",
         daysOfWeek: [6, 7],
         time: "08:00",
         durationMinutes: 240,
@@ -205,7 +210,11 @@ function seed(): Db {
     const channels = spec.channels.map((name) => row({ organizationId, name }));
 
     const products = spec.products.map((productSpec) => {
-      const product = row({ organizationId, name: productSpec.name });
+      const product = row({
+        organizationId,
+        name: productSpec.name,
+        imageUrl: productSpec.imageUrl,
+      });
 
       db.schedules.push(
         row({
@@ -364,6 +373,16 @@ export function remove<K extends Table>(table: K, id: string) {
 export function reset() {
   localStorage.removeItem(STORAGE_KEY);
   write(seed());
+}
+
+/**
+ * The whole store, read synchronously outside React. The guest API layer
+ * (`src/api/public.ts`) reads through this instead of the hooks. It is a
+ * point-in-time view: call it at read time, don't hold the reference across
+ * writes.
+ */
+export function snapshot(): Db {
+  return db;
 }
 
 /** All rows of a table, re-rendering on every write. */

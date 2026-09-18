@@ -26,6 +26,9 @@ function ProductPage() {
   const channels = useRows("channels", org.id);
   const prices = useRows("prices", org.id);
 
+  // Live-preview the image while its URL is edited; images are stored as URLs.
+  const [imageUrl, setImageUrl] = useState(product?.imageUrl ?? "");
+
   if (!product) {
     return <p>Product not found.</p>;
   }
@@ -60,20 +63,45 @@ function ProductPage() {
       </Link>
 
       <form
-        className="flex gap-2"
+        className="space-y-3"
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
-          update("products", productId, { name: String(form.get("name")) });
+          update("products", productId, {
+            name: String(form.get("name")),
+            imageUrl: String(form.get("imageUrl")),
+          });
         }}
       >
-        <input
-          name="name"
-          defaultValue={product.name}
-          required
-          className="flex-1 border border-gray-300 px-2 py-1"
-        />
-        <button className="bg-gray-900 px-3 py-1.5 text-sm text-white">Save</button>
+        <div className="flex gap-2">
+          <input
+            name="name"
+            defaultValue={product.name}
+            required
+            className="flex-1 border border-gray-300 px-2 py-1"
+          />
+          <button className="bg-gray-900 px-3 py-1.5 text-sm text-white">Save</button>
+        </div>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-gray-500">Image URL</span>
+          <input
+            name="imageUrl"
+            type="url"
+            value={imageUrl}
+            onChange={(event) => setImageUrl(event.target.value)}
+            required
+            className={`w-full ${INPUT}`}
+          />
+        </label>
+
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            className="h-48 w-full rounded-lg border border-gray-200 object-cover"
+          />
+        )}
       </form>
 
       <section>
